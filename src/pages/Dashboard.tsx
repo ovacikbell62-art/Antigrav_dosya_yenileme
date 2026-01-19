@@ -22,7 +22,7 @@ const Dashboard = () => {
     const [reports, setReports] = useState<Report[]>([]);
 
     useEffect(() => {
-        if (!isAuthenticated || user?.role !== 'ADMIN') {
+        if (!isAuthenticated || (user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN')) {
             navigate('/login');
         } else {
             fetchReports();
@@ -34,7 +34,7 @@ const Dashboard = () => {
         if (data) setReports(data);
     };
 
-    if (!user || user.role !== 'ADMIN') return null;
+    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) return null;
 
     return (
         <div className="container" style={{ padding: '2rem 1rem' }}>
@@ -73,6 +73,15 @@ const Dashboard = () => {
                         >
                             🗺️ Harita Düzenle (Yeni Yol Çiz)
                         </button>
+                        {user.role === 'SUPER_ADMIN' && (
+                            <button
+                                className="btn"
+                                style={{ background: '#6a1b9a', color: 'white', fontSize: '0.9rem' }}
+                                onClick={() => navigate('/admin-logs')}
+                            >
+                                🛡️ Sistem Logları
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

@@ -11,6 +11,7 @@ import './index.css';
 
 import MapEditorPage from './pages/MapEditorPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
+import AdminLogsPage from './pages/AdminLogsPage';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
                 <Route path="/map-editor" element={<MapEditorPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/admin-logs" element={<AdminLogsPage />} />
               </Route>
             </Routes>
           </Router>
