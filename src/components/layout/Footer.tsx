@@ -7,7 +7,7 @@ const Footer = () => {
             marginTop: 'auto'
         }}>
             <div className="container" style={{ textAlign: 'center', opacity: 0.8 }}>
-                <p>&copy; {new Date().getFullYear()} T.C. Ovacık Belediyesi. Tüm hakları saklıdır.</p>
+                <p>&copy; {new Date().getFullYear()} T.C. Ovacık Belediyesi. Tüm hakları saklıdır. (v1.0.1)</p>
                 <div style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
                     Bilgi İşlem Müdürlüğü tarafından geliştirilmiştir.
                 </div>
