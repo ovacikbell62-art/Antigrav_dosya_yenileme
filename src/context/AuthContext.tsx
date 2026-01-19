@@ -83,7 +83,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             return { success: true };
         }
 
-        // 2. NORMAL YÖNETİCİ KONTROLÜ
+        // 2. ÖZEL KULLANICI KONTROLÜ (Barış ve Hıdır)
+        const CUSTOM_USERS: Record<string, string> = {
+            'barış': 'kedicik62',
+            'baris': 'kedicik62',
+            'hıdır': '1234',
+            'hidir': '1234'
+        };
+
+        if (CUSTOM_USERS[lowerUsername] && password === CUSTOM_USERS[lowerUsername]) {
+            const newUser: User = {
+                id: lowerUsername,
+                username: username,
+                role: 'ADMIN'
+            };
+            setUser(newUser);
+
+            // Logla
+            try {
+                await supabase.from('logs').insert({
+                    user_id: lowerUsername,
+                    action: 'LOGIN',
+                    details: { role: 'ADMIN', method: 'custom_password' }
+                });
+            } catch (e) { console.error(e); }
+
+            return { success: true };
+        }
+
+        // 3. GENEL YÖNETİCİ KONTROLÜ (Ortak Şifre)
         if (ADMIN_USERS.includes(lowerUsername) && password === ADMIN_PASSWORD) {
             const newUser: User = {
                 id: lowerUsername,
