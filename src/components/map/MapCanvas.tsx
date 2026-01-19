@@ -68,28 +68,7 @@ const MapCanvas = () => {
                 ))}
             </MapContainer>
 
-            <div style={{
-                position: 'absolute',
-                top: '1rem',
-                left: '1rem',
-                zIndex: 1000,
-                background: 'rgba(255, 255, 255, 0.95)',
-                padding: '1rem',
-                borderRadius: 'var(--radius-md)',
-                boxShadow: 'var(--shadow-lg)',
-                maxWidth: '300px',
-                border: '1px solid var(--color-border)'
-            }}>
-                <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: 'var(--color-primary)' }}>Yol Durum Bilgisi</h3>
-                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-                    Harita üzerinden yolların açık/kapalı durumunu görüntüleyebilirsiniz.
-                </p>
-                <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', background: 'var(--color-success)', color: 'white', borderRadius: '4px' }}>Açık</span>
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', background: 'var(--color-danger)', color: 'white', borderRadius: '4px' }}>Kapalı</span>
-                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', background: 'var(--color-warning)', color: 'white', borderRadius: '4px' }}>Çalışma Var</span>
-                </div>
-            </div>
+
         </div>
     );
 };
