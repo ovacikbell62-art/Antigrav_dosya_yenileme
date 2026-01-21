@@ -1,15 +1,59 @@
-import { MapContainer, TileLayer, FeatureGroup, Polyline, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, FeatureGroup, Polyline, Popup, Marker } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
 import { useRoads } from '../../context/RoadContext';
 import { STATUS_CONFIG } from '../../types';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
+import { divIcon } from 'leaflet';
+
+import { useAuth } from '../../context/AuthContext';
 
 // Common Ovacık Center
 const OVACIK_CENTER: [number, number] = [39.3596, 39.2084];
 
+const createCameraIcon = (count: number) => divIcon({
+    className: 'custom-camera-icon',
+    html: `<div style="
+        background-color: white; 
+        border: 2px solid var(--color-primary); 
+        border-radius: 50%; 
+        width: 30px; 
+        height: 30px; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    ">
+        <span style="font-size: 16px;">📷</span>
+        ${count > 1 ? `<span style="
+            position: absolute; 
+            top: -5px; 
+            right: -5px; 
+            background: red; 
+            color: white; 
+            border-radius: 50%; 
+            width: 16px; 
+            height: 16px; 
+            font-size: 10px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            font-weight: bold;
+        ">${count}</span>` : ''}
+    </div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15]
+});
+
 const AdminMapCanvas = () => {
-    const { roads, addRoad, deleteRoad, updateRoadName, updateRoadStatus } = useRoads();
+    const { roads, addRoad, deleteRoad, updateRoadName, updateRoadStatus, addRoadImage, deleteRoadImage } = useRoads();
+    const { isSuperAdmin } = useAuth();
+
+    const getCenter = (coords: [number, number][]) => {
+        if (!coords || coords.length === 0) return OVACIK_CENTER;
+        const midIndex = Math.floor(coords.length / 2);
+        return coords[midIndex];
+    };
 
     const _onCreated = (e: any) => {
         const { layerType, layer } = e;
@@ -24,7 +68,8 @@ const AdminMapCanvas = () => {
             addRoad({
                 name: name,
                 status: 'OPEN', // Default status
-                coordinates: coordinates
+                coordinates: coordinates,
+                images: []
             });
 
             // Remove the drawn layer from the map immediately, as it will be re-rendered by the state update
@@ -87,64 +132,139 @@ const AdminMapCanvas = () => {
                 </FeatureGroup>
 
                 {roads.map((road) => (
-                    <Polyline
-                        key={road.id}
-                        positions={road.coordinates}
-                        pathOptions={{ color: STATUS_CONFIG[road.status].color, weight: 6, opacity: 0.9 }}
-                    >
-                        <Popup>
-                            <div>
-                                <strong>{road.name}</strong>
-                                <br />
-                                Durum: {STATUS_CONFIG[road.status].label}
-                                <hr style={{ margin: '8px 0' }} />
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                    <div style={{ display: 'flex', gap: '5px', marginBottom: '5px' }}>
-                                        <button
-                                            className="btn"
-                                            style={{ flex: 1, fontSize: '10px', padding: '4px', background: STATUS_CONFIG['OPEN'].color, color: 'white' }}
-                                            onClick={() => updateRoadStatus(road.id, 'OPEN')}
-                                        >
-                                            Açık
-                                        </button>
-                                        <button
-                                            className="btn"
-                                            style={{ flex: 1, fontSize: '10px', padding: '4px', background: STATUS_CONFIG['CLOSED'].color, color: 'white' }}
-                                            onClick={() => updateRoadStatus(road.id, 'CLOSED')}
-                                        >
-                                            Kapalı
-                                        </button>
-                                        <button
-                                            className="btn"
-                                            style={{ flex: 1, fontSize: '10px', padding: '4px', background: STATUS_CONFIG['WORK'].color, color: 'white' }}
-                                            onClick={() => updateRoadStatus(road.id, 'WORK')}
-                                        >
-                                            Çalışma
-                                        </button>
+                    <div key={road.id}>
+                        <Polyline
+                            positions={road.coordinates}
+                            pathOptions={{ color: STATUS_CONFIG[road.status].color, weight: 12, opacity: 0.9 }}
+                        >
+                            <Popup>
+                                <div style={{ minWidth: '220px', maxWidth: '320px' }}>
+                                    <strong style={{ fontSize: '1.2rem', display: 'block', marginBottom: '8px' }}>{road.name}</strong>
+
+                                    <div style={{ marginBottom: '12px', fontSize: '14px' }}>
+                                        Durum: <strong>{STATUS_CONFIG[road.status].label}</strong>
                                     </div>
-                                    <button
-                                        className="btn"
-                                        style={{ fontSize: '12px', padding: '4px' }}
-                                        onClick={() => {
-                                            const newName = prompt("Yol ismini düzenle:", road.name);
-                                            if (newName) updateRoadName(road.id, newName);
-                                        }}
-                                    >
-                                        İsim Düzenle
-                                    </button>
-                                    <button
-                                        className="btn btn-danger"
-                                        style={{ fontSize: '12px', padding: '4px', background: 'var(--color-danger)', color: 'white' }}
-                                        onClick={() => {
-                                            if (confirm(`${road.name} silinsin mi?`)) deleteRoad(road.id);
-                                        }}
-                                    >
-                                        Yolu Sil
-                                    </button>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {/* Status Buttons */}
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button
+                                                className="btn"
+                                                style={{ flex: 1, padding: '8px', fontSize: '14px', background: STATUS_CONFIG['OPEN'].color, color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                onClick={() => updateRoadStatus(road.id, 'OPEN')}
+                                            >
+                                                Açık
+                                            </button>
+                                            <button
+                                                className="btn"
+                                                style={{ flex: 1, padding: '8px', fontSize: '14px', background: STATUS_CONFIG['CLOSED'].color, color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                onClick={() => updateRoadStatus(road.id, 'CLOSED')}
+                                            >
+                                                Kapalı
+                                            </button>
+                                            <button
+                                                className="btn"
+                                                style={{ flex: 1, padding: '8px', fontSize: '14px', background: STATUS_CONFIG['WORK'].color, color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                onClick={() => updateRoadStatus(road.id, 'WORK')}
+                                            >
+                                                Çalışma
+                                            </button>
+                                        </div>
+
+                                        {/* Image Management */}
+                                        <div style={{ borderTop: '1px solid #eee', borderBottom: '1px solid #eee', padding: '10px 0', margin: '5px 0' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                                <strong style={{ fontSize: '14px' }}>Fotoğraflar</strong>
+                                                <button
+                                                    style={{ padding: '4px 8px', fontSize: '12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                    onClick={() => {
+                                                        const url = prompt("Fotoğraf URL'si giriniz:");
+                                                        if (url) addRoadImage(road.id, url);
+                                                    }}
+                                                >
+                                                    + Ekle
+                                                </button>
+                                            </div>
+
+                                            {road.images && road.images.length > 0 ? (
+                                                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                                                    {road.images.map((img, idx) => (
+                                                        <div key={idx} style={{ position: 'relative', flexShrink: 0 }}>
+                                                            <a href={img.url} target="_blank" rel="noopener noreferrer">
+                                                                <img
+                                                                    src={img.url}
+                                                                    alt="foto"
+                                                                    style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ddd' }}
+                                                                />
+                                                            </a>
+                                                            {isSuperAdmin && (
+                                                                <div style={{ fontSize: '9px', color: '#555', marginTop: '2px', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Ekleyen: ${img.addedBy}\nTarih: ${new Date(img.date).toLocaleString('tr-TR')}`}>
+                                                                    {img.addedBy}
+                                                                </div>
+                                                            )}
+                                                            <button
+                                                                style={{
+                                                                    position: 'absolute', top: -5, right: -5,
+                                                                    background: 'red', color: 'white',
+                                                                    width: '18px', height: '18px',
+                                                                    borderRadius: '50%', border: 'none',
+                                                                    cursor: 'pointer', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                                }}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (confirm("Bu fotoğrafı silmek istiyor musunuz?")) deleteRoadImage(road.id, img.url);
+                                                                }}
+                                                            >
+                                                                X
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <small style={{ color: '#888', fontStyle: 'italic' }}>Henüz fotoğraf yok.</small>
+                                            )}
+                                        </div>
+
+                                        {/* Edit Actions */}
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button
+                                                className="btn"
+                                                style={{ flex: 1, padding: '8px', fontSize: '14px', background: '#f3f4f6', border: '1px solid #ddd', borderRadius: '4px', cursor: 'pointer' }}
+                                                onClick={() => {
+                                                    const newName = prompt("Yol ismini düzenle:", road.name);
+                                                    if (newName) updateRoadName(road.id, newName);
+                                                }}
+                                            >
+                                                İsim Düzenle
+                                            </button>
+                                            <button
+                                                className="btn btn-danger"
+                                                style={{ flex: 1, padding: '8px', fontSize: '14px', background: 'var(--color-danger)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                onClick={() => {
+                                                    if (confirm(`${road.name} silinsin mi?`)) deleteRoad(road.id);
+                                                }}
+                                            >
+                                                Yolu Sil
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </Popup>
-                    </Polyline>
+                            </Popup>
+                        </Polyline>
+
+                        {/* Camera Icon for roads with images */}
+                        {road.images && road.images.length > 0 && (
+                            <Marker
+                                position={getCenter(road.coordinates)}
+                                icon={createCameraIcon(road.images.length)}
+                            >
+                                <Popup>
+                                    <strong>{road.name}</strong><br />
+                                    {road.images.length} fotoğraf.
+                                </Popup>
+                            </Marker>
+                        )}
+                    </div>
                 ))}
             </MapContainer>
         </div>

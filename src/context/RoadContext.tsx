@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import type { Road, RoadStatus } from '../types';
+import { useAuth } from './AuthContext';
+import type { Road, RoadStatus, RoadImage } from '../types';
 import { MOCK_ROADS } from '../data/mockRoads';
 import { supabase } from '../supabase';
 import { v4 as uuidv4 } from 'uuid';
@@ -11,12 +12,15 @@ interface RoadContextType {
     addRoad: (road: Omit<Road, 'id' | 'lastUpdated'>) => void;
     deleteRoad: (id: string) => void;
     updateRoadName: (id: string, name: string) => void;
+    addRoadImage: (id: string, imageUrl: string) => void;
+    deleteRoadImage: (id: string, imageUrl: string) => void;
 }
 
 const RoadContext = createContext<RoadContextType | undefined>(undefined);
 
 export const RoadProvider = ({ children }: { children: ReactNode }) => {
     const [roads, setRoads] = useState<Road[]>([]);
+    const { user } = useAuth();
 
     // Fetch roads from Supabase
     const fetchRoads = async () => {
@@ -43,6 +47,11 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
                     name: dbRoad.name,
                     status: dbRoad.status as RoadStatus,
                     coordinates: dbRoad.coordinates,
+                    images: (dbRoad.images || []).map((img: any) =>
+                        typeof img === 'string'
+                            ? { url: img, addedBy: 'Bilinmiyor', date: new Date().toISOString() }
+                            : img
+                    ),
                     lastUpdated: dbRoad.last_updated
                 }));
                 // Check for duplicate IDs which can cause React key errors
@@ -64,6 +73,7 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
                 name: road.name,
                 status: 'OPEN',
                 coordinates: road.coordinates,
+                images: [],
                 last_updated: new Date().toISOString()
             }));
 
@@ -83,6 +93,11 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
                     name: r.name,
                     status: r.status as RoadStatus,
                     coordinates: r.coordinates,
+                    images: (r.images || []).map((img: any) =>
+                        typeof img === 'string'
+                            ? { url: img, addedBy: 'Bilinmiyor', date: new Date().toISOString() }
+                            : img
+                    ),
                     lastUpdated: r.last_updated
                 }));
                 setRoads(mapped);
@@ -145,6 +160,7 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
                 name: roadData.name,
                 status: roadData.status,
                 coordinates: roadData.coordinates,
+                images: [],
                 last_updated: new Date().toISOString()
             };
 
@@ -166,6 +182,11 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
                     name: data.name,
                     status: data.status as RoadStatus,
                     coordinates: data.coordinates,
+                    images: (data.images || []).map((img: any) =>
+                        typeof img === 'string'
+                            ? { url: img, addedBy: 'Bilinmiyor', date: new Date().toISOString() }
+                            : img
+                    ),
                     lastUpdated: data.last_updated
                 };
                 setRoads(prev => [...prev, newRoad]);
@@ -221,8 +242,59 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const addRoadImage = async (id: string, imageUrl: string) => {
+        const road = roads.find(r => r.id === id);
+        if (!road) return;
+
+        const newImageObj: RoadImage = {
+            url: imageUrl,
+            addedBy: user?.username || 'Anonim',
+            date: new Date().toISOString()
+        };
+
+        const newImages = [...(road.images || []), newImageObj];
+
+        // Optimistic
+        setRoads(prev => prev.map(r => r.id === id ? { ...r, images: newImages } : r));
+
+        try {
+            const { error } = await supabase
+                .from('roads')
+                .update({ images: newImages, last_updated: new Date().toISOString() })
+                .eq('id', id);
+
+            if (error) throw error;
+        } catch (err) {
+            console.error("Error adding image:", err);
+            fetchRoads();
+        }
+    };
+
+    const deleteRoadImage = async (id: string, imageUrl: string) => {
+        const road = roads.find(r => r.id === id);
+        if (!road) return;
+
+        // Filter by URL since imageUrl arg is string
+        const newImages = (road.images || []).filter(img => img.url !== imageUrl);
+
+        // Optimistic
+        setRoads(prev => prev.map(r => r.id === id ? { ...r, images: newImages } : r));
+
+        try {
+            const { error } = await supabase
+                .from('roads')
+                .update({ images: newImages, last_updated: new Date().toISOString() })
+                .eq('id', id);
+
+            if (error) throw error;
+        } catch (err) {
+            console.error("Error deleting image:", err);
+            fetchRoads();
+        }
+    };
+
     return (
-        <RoadContext.Provider value={{ roads, updateRoadStatus, updateAllRoadStatus, addRoad, deleteRoad, updateRoadName }}>
+        <RoadContext.Provider value={{ roads, updateRoadStatus, updateAllRoadStatus, addRoad, deleteRoad, updateRoadName, addRoadImage, deleteRoadImage }}>
             {children}
         </RoadContext.Provider>
     );

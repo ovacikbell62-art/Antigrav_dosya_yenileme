@@ -1,10 +1,17 @@
 export type RoadStatus = 'OPEN' | 'CLOSED' | 'WORK';
 
+export interface RoadImage {
+    url: string;
+    addedBy: string;
+    date: string;
+}
+
 export interface Road {
     id: string;
     name: string;
     status: RoadStatus;
     coordinates: [number, number][]; // Array of [lat, lng]
+    images?: RoadImage[];
     lastUpdated: string;
 }
 
