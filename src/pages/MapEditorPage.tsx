@@ -4,16 +4,16 @@ import { useEffect } from 'react';
 import AdminMapCanvas from '../components/map/AdminMapCanvas';
 
 const MapEditorPage = () => {
-    const { user, isAuthenticated } = useAuth();
+    const { isAuthenticated, isAdmin } = useAuth();
     const navigate = useNavigate();
 
     useEffect(() => {
-        if (!isAuthenticated || user?.role !== 'ADMIN') {
+        if (!isAuthenticated || !isAdmin) {
             navigate('/login');
         }
-    }, [isAuthenticated, user, navigate]);
+    }, [isAuthenticated, isAdmin, navigate]);
 
-    if (!user || user.role !== 'ADMIN') return null;
+    if (!isAuthenticated || !isAdmin) return null;
 
     return <AdminMapCanvas />;
 };

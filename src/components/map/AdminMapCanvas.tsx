@@ -109,26 +109,7 @@ const AdminMapCanvas = () => {
 
     return (
         <div style={{ height: 'calc(100vh - 64px)', width: '100%', position: 'relative' }}>
-            <div style={{
-                position: 'absolute',
-                top: 10,
-                right: 10,
-                zIndex: 1000,
-                background: 'white',
-                padding: '10px',
-                borderRadius: '8px',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-            }}>
-                <strong>Editör Modu</strong>
-                <p style={{ margin: '5px 0 0 0', fontSize: '12px' }}>
-                    Üst soldaki araç çubuğunu kullanarak çizgi çizebilirsiniz.
-                </p>
-                {uploading && (
-                    <div style={{ marginTop: '10px', color: 'blue', fontWeight: 'bold' }}>
-                        Fotoğraf Yükleniyor...
-                    </div>
-                )}
-            </div>
+
 
             <input
                 type="file"
