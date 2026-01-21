@@ -101,13 +101,10 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
                     images: (r.images || []).map((img: any) =>
                         typeof img === 'string'
                             ? { url: img, addedBy: 'Bilinmiyor', date: new Date().toISOString() }
-                        images: (dbRoad.images || []).map((img: any) =>
-                                typeof img === 'string'
-                                    ? { url: img, addedBy: 'Bilinmiyor', date: new Date().toISOString() }
-                                    : img
-                            ),
-                        cameraPosition: dbRoad.camera_position || 'CENTER',
-                        lastUpdated: dbRoad.last_updated
+                            : img
+                    ),
+                    cameraPosition: r.camera_position || 'CENTER',
+                    lastUpdated: r.last_updated
                 }));
                 setRoads(mapped);
             }
