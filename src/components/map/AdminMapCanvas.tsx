@@ -47,7 +47,7 @@ const createCameraIcon = (count: number) => divIcon({
 });
 
 const AdminMapCanvas = () => {
-    const { roads, addRoad, deleteRoad, updateRoadName, updateRoadStatus, deleteRoadImage, uploadRoadImage } = useRoads();
+    const { roads, addRoad, deleteRoad, updateRoadName, updateRoadStatus, deleteRoadImage, uploadRoadImage, updateRoadCameraPosition } = useRoads();
     const { isSuperAdmin } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
@@ -71,8 +71,12 @@ const AdminMapCanvas = () => {
         }
     };
 
-    const getCenter = (coords: [number, number][]) => {
+    const getCenter = (coords: [number, number][], position: 'START' | 'CENTER' | 'END' = 'CENTER') => {
         if (!coords || coords.length === 0) return OVACIK_CENTER;
+
+        if (position === 'START') return coords[0];
+        if (position === 'END') return coords[coords.length - 1];
+
         const midIndex = Math.floor(coords.length / 2);
         return coords[midIndex];
     };
@@ -261,6 +265,33 @@ const AdminMapCanvas = () => {
                                             )}
                                         </div>
 
+
+
+                                        {/* Camera Position Controls */}
+                                        <div style={{ marginBottom: '8px' }}>
+                                            <strong style={{ fontSize: '12px', display: 'block', marginBottom: '4px' }}>Kamera İkonu Konumu:</strong>
+                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                                {['START', 'CENTER', 'END'].map((pos) => (
+                                                    <button
+                                                        key={pos}
+                                                        onClick={() => updateRoadCameraPosition(road.id, pos as any)}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '4px',
+                                                            fontSize: '10px',
+                                                            background: road.cameraPosition === pos ? '#2563eb' : '#f3f4f6',
+                                                            color: road.cameraPosition === pos ? 'white' : '#333',
+                                                            border: '1px solid #ddd',
+                                                            borderRadius: '4px',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        {pos === 'START' ? 'Baş' : pos === 'CENTER' ? 'Orta' : 'Son'}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
                                         {/* Edit Actions */}
                                         <div style={{ display: 'flex', gap: '8px' }}>
                                             <button
@@ -289,21 +320,24 @@ const AdminMapCanvas = () => {
                         </Polyline>
 
                         {/* Camera Icon for roads with images */}
-                        {road.images && road.images.length > 0 && (
-                            <Marker
-                                position={getCenter(road.coordinates)}
-                                icon={createCameraIcon(road.images.length)}
-                            >
-                                <Popup>
-                                    <strong>{road.name}</strong><br />
-                                    {road.images.length} fotoğraf.
-                                </Popup>
-                            </Marker>
-                        )}
+                        {
+                            road.images && road.images.length > 0 && (
+                                <Marker
+                                    position={getCenter(road.coordinates, road.cameraPosition)}
+                                    icon={createCameraIcon(road.images.length)}
+                                >
+                                    <Popup>
+                                        <strong>{road.name}</strong><br />
+                                        {road.images.length} fotoğraf.
+                                    </Popup>
+                                </Marker>
+                            )
+                        }
                     </div>
-                ))}
-            </MapContainer>
-        </div>
+                ))
+                }
+            </MapContainer >
+        </div >
     );
 };
 

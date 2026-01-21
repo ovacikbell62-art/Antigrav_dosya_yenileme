@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
 import { supabase } from '../supabase';
+import PhotoGallery from '../components/PhotoGallery';
 
 interface Report {
     id: string;
@@ -254,7 +255,10 @@ const Dashboard = () => {
                     </div>
                 )}
             </div>
+            <PhotoGallery />
         </div>
+
+
     );
 };
 

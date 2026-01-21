@@ -14,7 +14,9 @@ interface RoadContextType {
     updateRoadName: (id: string, name: string) => void;
     addRoadImage: (id: string, imageUrl: string) => void;
     deleteRoadImage: (id: string, imageUrl: string) => void;
+
     uploadRoadImage: (id: string, file: File) => Promise<void>;
+    updateRoadCameraPosition: (id: string, position: 'START' | 'CENTER' | 'END') => void;
 }
 
 const RoadContext = createContext<RoadContextType | undefined>(undefined);
@@ -53,6 +55,8 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
                             ? { url: img, addedBy: 'Bilinmiyor', date: new Date().toISOString() }
                             : img
                     ),
+
+                    cameraPosition: dbRoad.camera_position || 'CENTER',
                     lastUpdated: dbRoad.last_updated
                 }));
                 // Check for duplicate IDs which can cause React key errors
@@ -97,9 +101,13 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
                     images: (r.images || []).map((img: any) =>
                         typeof img === 'string'
                             ? { url: img, addedBy: 'Bilinmiyor', date: new Date().toISOString() }
-                            : img
-                    ),
-                    lastUpdated: r.last_updated
+                        images: (dbRoad.images || []).map((img: any) =>
+                                typeof img === 'string'
+                                    ? { url: img, addedBy: 'Bilinmiyor', date: new Date().toISOString() }
+                                    : img
+                            ),
+                        cameraPosition: dbRoad.camera_position || 'CENTER',
+                        lastUpdated: dbRoad.last_updated
                 }));
                 setRoads(mapped);
             }
@@ -322,11 +330,28 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
             console.error("Error uploading image:", error);
             alert("Fotoğraf yüklenirken hata oluştu!");
             throw error;
+            throw error;
+        }
+    };
+
+    const updateRoadCameraPosition = async (id: string, position: 'START' | 'CENTER' | 'END') => {
+        setRoads(prev => prev.map(r => r.id === id ? { ...r, cameraPosition: position } : r));
+
+        try {
+            const { error } = await supabase
+                .from('roads')
+                .update({ camera_position: position, last_updated: new Date().toISOString() })
+                .eq('id', id);
+
+            if (error) throw error;
+        } catch (err) {
+            console.error("Error updating camera position:", err);
+            fetchRoads();
         }
     };
 
     return (
-        <RoadContext.Provider value={{ roads, updateRoadStatus, updateAllRoadStatus, addRoad, deleteRoad, updateRoadName, addRoadImage, deleteRoadImage, uploadRoadImage }}>
+        <RoadContext.Provider value={{ roads, updateRoadStatus, updateAllRoadStatus, addRoad, deleteRoad, updateRoadName, addRoadImage, deleteRoadImage, uploadRoadImage, updateRoadCameraPosition }}>
             {children}
         </RoadContext.Provider>
     );

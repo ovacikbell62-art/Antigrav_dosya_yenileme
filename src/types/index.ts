@@ -12,6 +12,7 @@ export interface Road {
     status: RoadStatus;
     coordinates: [number, number][]; // Array of [lat, lng]
     images?: RoadImage[];
+    cameraPosition?: 'START' | 'CENTER' | 'END';
     lastUpdated: string;
 }
 
