@@ -1,5 +1,6 @@
 import { MapContainer, TileLayer, FeatureGroup, Polyline, Popup, Marker } from 'react-leaflet';
 import { EditControl } from 'react-leaflet-draw';
+import { useRef, useState } from 'react';
 import { useRoads } from '../../context/RoadContext';
 import { STATUS_CONFIG } from '../../types';
 import 'leaflet/dist/leaflet.css';
@@ -46,8 +47,29 @@ const createCameraIcon = (count: number) => divIcon({
 });
 
 const AdminMapCanvas = () => {
-    const { roads, addRoad, deleteRoad, updateRoadName, updateRoadStatus, addRoadImage, deleteRoadImage } = useRoads();
+    const { roads, addRoad, deleteRoad, updateRoadName, updateRoadStatus, deleteRoadImage, uploadRoadImage } = useRoads();
     const { isSuperAdmin } = useAuth();
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [uploading, setUploading] = useState(false);
+    const [selectedRoadId, setSelectedRoadId] = useState<string | null>(null);
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0] && selectedRoadId) {
+            const file = e.target.files[0];
+            setUploading(true);
+            try {
+                await uploadRoadImage(selectedRoadId, file);
+                alert("Fotoğraf başarıyla yüklendi!");
+            } catch (error) {
+                console.error("Upload failed", error);
+                alert("Yükleme başarısız oldu.");
+            } finally {
+                setUploading(false);
+                setSelectedRoadId(null);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            }
+        }
+    };
 
     const getCenter = (coords: [number, number][]) => {
         if (!coords || coords.length === 0) return OVACIK_CENTER;
@@ -97,7 +119,20 @@ const AdminMapCanvas = () => {
                 <p style={{ margin: '5px 0 0 0', fontSize: '12px' }}>
                     Üst soldaki araç çubuğunu kullanarak çizgi çizebilirsiniz.
                 </p>
+                {uploading && (
+                    <div style={{ marginTop: '10px', color: 'blue', fontWeight: 'bold' }}>
+                        Fotoğraf Yükleniyor...
+                    </div>
+                )}
             </div>
+
+            <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept="image/*"
+                onChange={handleFileSelect}
+            />
 
             <MapContainer
                 center={OVACIK_CENTER}
@@ -178,11 +213,12 @@ const AdminMapCanvas = () => {
                                                 <button
                                                     style={{ padding: '4px 8px', fontSize: '12px', background: '#2563eb', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                                                     onClick={() => {
-                                                        const url = prompt("Fotoğraf URL'si giriniz:");
-                                                        if (url) addRoadImage(road.id, url);
+                                                        setSelectedRoadId(road.id);
+                                                        setTimeout(() => fileInputRef.current?.click(), 100);
                                                     }}
+                                                    disabled={uploading}
                                                 >
-                                                    + Ekle
+                                                    {uploading && selectedRoadId === road.id ? '...' : '+ Foto'}
                                                 </button>
                                             </div>
 

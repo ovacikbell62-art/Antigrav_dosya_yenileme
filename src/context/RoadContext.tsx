@@ -14,6 +14,7 @@ interface RoadContextType {
     updateRoadName: (id: string, name: string) => void;
     addRoadImage: (id: string, imageUrl: string) => void;
     deleteRoadImage: (id: string, imageUrl: string) => void;
+    uploadRoadImage: (id: string, file: File) => Promise<void>;
 }
 
 const RoadContext = createContext<RoadContextType | undefined>(undefined);
@@ -293,8 +294,39 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const uploadRoadImage = async (id: string, file: File) => {
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${id}/${uuidv4()}.${fileExt}`;
+            const filePath = `${fileName}`;
+
+            // 1. Upload to Supabase Storage
+            const { error: uploadError } = await supabase.storage
+                .from('road_images')
+                .upload(filePath, file);
+
+            if (uploadError) {
+                console.error("Storage upload error:", uploadError);
+                throw uploadError;
+            }
+
+            // 2. Get Public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('road_images')
+                .getPublicUrl(filePath);
+
+            // 3. Add to Road record
+            await addRoadImage(id, publicUrl);
+
+        } catch (error) {
+            console.error("Error uploading image:", error);
+            alert("Fotoğraf yüklenirken hata oluştu!");
+            throw error;
+        }
+    };
+
     return (
-        <RoadContext.Provider value={{ roads, updateRoadStatus, updateAllRoadStatus, addRoad, deleteRoad, updateRoadName, addRoadImage, deleteRoadImage }}>
+        <RoadContext.Provider value={{ roads, updateRoadStatus, updateAllRoadStatus, addRoad, deleteRoad, updateRoadName, addRoadImage, deleteRoadImage, uploadRoadImage }}>
             {children}
         </RoadContext.Provider>
     );
