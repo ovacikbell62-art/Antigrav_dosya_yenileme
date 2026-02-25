@@ -17,6 +17,8 @@ interface RoadContextType {
 
     uploadRoadImage: (id: string, file: File) => Promise<void>;
     updateRoadCameraPosition: (id: string, position: 'START' | 'CENTER' | 'END') => void;
+    recoverFromLocalStorage: () => Promise<{ count: number; error: any | null }>;
+    backupToLocalStorage: () => void;
 }
 
 const RoadContext = createContext<RoadContextType | undefined>(undefined);
@@ -38,8 +40,9 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
             console.log("Fetched roads:", data?.length);
 
             if (!data || data.length === 0) {
-                // Try to seed if empty.
-                if (data && data.length === 0) {
+                // Try to seed if empty AND no previous seeding occurred
+                const hasSeeded = localStorage.getItem('roads_initial_seeded_v2');
+                if (!hasSeeded) {
                     await seedInitialData();
                 } else {
                     setRoads([]);
@@ -72,6 +75,9 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
     const seedInitialData = async () => {
         console.log('Seeding initial data...');
         try {
+            // Mark as seeded even if empty to prevent re-seeding and overwriting custom data later
+            localStorage.setItem('roads_initial_seeded_v2', 'true');
+
             // Generate valid UUIDs for mock data instead of using "1", "2" etc.
             const dbPayload = MOCK_ROADS.map(road => ({
                 id: uuidv4(), // Explicitly generate UUID
@@ -347,8 +353,56 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const backupToLocalStorage = () => {
+        if (roads.length > 0) {
+            localStorage.setItem('roads_backup', JSON.stringify(roads));
+        }
+    };
+
+    const recoverFromLocalStorage = async () => {
+        console.log("Checking for local data recovery...");
+        const localData = localStorage.getItem('roads') || localStorage.getItem('roads_backup');
+
+        if (!localData) return { count: 0, error: null };
+
+        try {
+            const parsedRoads: Road[] = JSON.parse(localData);
+            if (!Array.isArray(parsedRoads) || parsedRoads.length === 0) return { count: 0, error: null };
+
+            // Fetch current roads to avoid duplicates
+            const { data: dbRoads } = await supabase.from('roads').select('name');
+            const existingNames = new Set((dbRoads || []).map(r => r.name));
+
+            const toUpload = parsedRoads
+                .filter(r => !existingNames.has(r.name)) // Only upload if name is unique
+                .map(r => ({
+                    id: r.id.length > 30 ? r.id : uuidv4(), // Ensure UUID
+                    name: r.name,
+                    status: r.status,
+                    coordinates: r.coordinates,
+                    images: r.images || [],
+                    last_updated: r.lastUpdated || new Date().toISOString()
+                }));
+
+            if (toUpload.length === 0) return { count: 0, error: null };
+
+            const { error } = await supabase.from('roads').insert(toUpload);
+            if (error) throw error;
+
+            await fetchRoads();
+            return { count: toUpload.length, error: null };
+        } catch (err) {
+            console.error("Recovery failed:", err);
+            return { count: 0, error: err };
+        }
+    };
+
     return (
-        <RoadContext.Provider value={{ roads, updateRoadStatus, updateAllRoadStatus, addRoad, deleteRoad, updateRoadName, addRoadImage, deleteRoadImage, uploadRoadImage, updateRoadCameraPosition }}>
+        <RoadContext.Provider value={{
+            roads, updateRoadStatus, updateAllRoadStatus, addRoad, deleteRoad,
+            updateRoadName, addRoadImage, deleteRoadImage, uploadRoadImage,
+            updateRoadCameraPosition, recoverFromLocalStorage, backupToLocalStorage
+        }}>
             {children}
         </RoadContext.Provider>
     );

@@ -4,7 +4,7 @@ import { useAnnouncements } from '../context/AnnouncementContext';
 import { STATUS_CONFIG } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
+import { AlertTriangle, CheckCircle, XCircle, MessageSquare, Download, Upload, Database } from 'lucide-react';
 import { supabase } from '../supabase';
 import PhotoGallery from '../components/PhotoGallery';
 
@@ -17,28 +17,108 @@ interface Report {
 
 const Dashboard = () => {
     const { user, isAuthenticated } = useAuth();
-    const { roads, updateRoadStatus, updateAllRoadStatus } = useRoads();
+    const { roads, updateRoadStatus, updateAllRoadStatus, recoverFromLocalStorage, backupToLocalStorage } = useRoads();
     const { announcements, addAnnouncement, deleteAnnouncement } = useAnnouncements();
     const navigate = useNavigate();
     const [reports, setReports] = useState<Report[]>([]);
+    const [hasLocalData, setHasLocalData] = useState(false);
+    const [recoveryStatus, setRecoveryStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
 
     useEffect(() => {
         if (!isAuthenticated || (user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN')) {
             navigate('/login');
         } else {
             fetchReports();
+            checkLegacyData();
         }
     }, [isAuthenticated, user, navigate]);
+
+    const checkLegacyData = () => {
+        const data = localStorage.getItem('roads') || localStorage.getItem('roads_backup');
+        if (data) {
+            try {
+                const parsed = JSON.parse(data);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    setHasLocalData(true);
+                }
+            } catch (e) {
+                console.error("Local data check failed", e);
+            }
+        }
+    };
 
     const fetchReports = async () => {
         const { data } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
         if (data) setReports(data);
     };
 
+    const handleExport = () => {
+        const dataStr = JSON.stringify(roads, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+        const exportFileDefaultName = `ovacik_yol_yedek_${new Date().toISOString().split('T')[0]}.json`;
+
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+    };
+
+    const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const json = JSON.parse(event.target?.result as string);
+                if (Array.isArray(json)) {
+                    if (confirm(`${json.length} adet yol verisi içe aktarılacak. Mevcut olmayanlar eklenecek. Onaylıyor musunuz?`)) {
+                        localStorage.setItem('roads_backup', JSON.stringify(json));
+                        const result = await recoverFromLocalStorage();
+                        alert(`${result.count} yeni yol başarıyla eklendi!`);
+                    }
+                }
+            } catch (error) {
+                alert("Geçersiz yedek dosyası!");
+            }
+        };
+        reader.readAsText(file);
+    };
+
     if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) return null;
 
     return (
         <div className="container" style={{ padding: '2rem 1rem' }}>
+            {hasLocalData && recoveryStatus !== 'success' && (
+                <div className="card" style={{ marginBottom: '2rem', background: '#fff9db', border: '1px solid #fab005', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                        <AlertTriangle color="#f08c00" size={32} />
+                        <div>
+                            <strong style={{ display: 'block' }}>Eski Veriler Tespit Edildi!</strong>
+                            <p style={{ margin: 0, fontSize: '0.9rem' }}>Tarayıcınızda kayıtlı {roads.length === 0 ? 'silinmiş görünen' : 'eski'} yol çizgileri bulundu. Bunları veritabanına geri yüklemek ister misiniz?</p>
+                        </div>
+                    </div>
+                    <button
+                        className="btn"
+                        style={{ background: '#f08c00', color: 'white' }}
+                        disabled={recoveryStatus === 'loading'}
+                        onClick={async () => {
+                            setRecoveryStatus('loading');
+                            const result = await recoverFromLocalStorage();
+                            if (result.error) {
+                                setRecoveryStatus('error');
+                                alert("Veriler kurtarılırken bir hata oluştu.");
+                            } else {
+                                setRecoveryStatus('success');
+                                alert(`${result.count} yol başarıyla kurtarıldı!`);
+                                setHasLocalData(false);
+                            }
+                        }}
+                    >
+                        {recoveryStatus === 'loading' ? 'Yükleniyor...' : 'Verileri Kurtar'}
+                    </button>
+                </div>
+            )}
             <div className="card" style={{ marginBottom: '2rem' }}>
                 <h1 style={{ color: 'var(--color-primary)', borderBottom: '1px solid var(--color-border)', paddingBottom: '1rem', marginBottom: '1rem' }}>
                     Yönetim Paneli
@@ -85,6 +165,27 @@ const Dashboard = () => {
                         )}
                     </div>
                 </div>
+            </div>
+
+            <div className="card" style={{ marginBottom: '2rem', background: '#f8fafc' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Database size={20} color="var(--color-primary)" />
+                        <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Veri Yönetimi ve Yedekleme</h2>
+                    </div>
+                    <div style={{ display: 'flex', gap: '1rem' }}>
+                        <button className="btn btn-outline" onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Download size={16} /> Yolları Yedekle (JSON)
+                        </button>
+                        <label className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                            <Upload size={16} /> Yedek Yükle
+                            <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
+                        </label>
+                    </div>
+                </div>
+                <p style={{ margin: '1rem 0 0 0', fontSize: '0.85rem', color: '#666' }}>
+                    İpucu: Çizdiğiniz yolların kalıcı olması için düzenli olarak yedek almanız önerilir. Tarayıcınızdaki eski verileri kurtardığınızda da veritabanına otomatik eklenir.
+                </p>
             </div>
 
             <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
@@ -152,6 +253,18 @@ const Dashboard = () => {
                                 }}
                             >
                                 <AlertTriangle size={14} /> Çalışma
+                            </button>
+                        </div>
+                        <div style={{ marginTop: '0.5rem' }}>
+                            <button
+                                className="btn"
+                                style={{ width: '100%', fontSize: '0.75rem', padding: '0.3rem', background: 'transparent', border: '1px dashed #ccc', color: '#888' }}
+                                onClick={() => {
+                                    backupToLocalStorage();
+                                    alert("Bu yolun verileri tarayıcıya yedeklendi.");
+                                }}
+                            >
+                                Yerel Yedek Al
                             </button>
                         </div>
                     </div>
