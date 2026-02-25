@@ -4,7 +4,7 @@ import { useAnnouncements } from '../context/AnnouncementContext';
 import { STATUS_CONFIG } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle, XCircle, MessageSquare, Download, Upload, Database } from 'lucide-react';
+import { AlertTriangle, CheckCircle, XCircle, MessageSquare, Download, Upload, Database, Settings } from 'lucide-react';
 import { supabase } from '../supabase';
 import PhotoGallery from '../components/PhotoGallery';
 
@@ -23,6 +23,8 @@ const Dashboard = () => {
     const [reports, setReports] = useState<Report[]>([]);
     const [hasLocalData, setHasLocalData] = useState(false);
     const [recoveryStatus, setRecoveryStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    const [showLocalKeys, setShowLocalKeys] = useState(false);
+    const [recoverySummary, setRecoverySummary] = useState<string | null>(null);
 
     useEffect(() => {
         if (!isAuthenticated || (user?.role !== 'ADMIN' && user?.role !== 'SUPER_ADMIN')) {
@@ -34,17 +36,18 @@ const Dashboard = () => {
     }, [isAuthenticated, user, navigate]);
 
     const checkLegacyData = () => {
-        const data = localStorage.getItem('roads') || localStorage.getItem('roads_backup');
-        if (data) {
+        const keys = ['roads', 'roads_backup', 'ovacik_roads', 'road_data', 'map_roads', 'layers', 'ovacik-roads'];
+        const found = keys.some(key => {
+            const data = localStorage.getItem(key);
+            if (!data) return false;
             try {
                 const parsed = JSON.parse(data);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    setHasLocalData(true);
-                }
+                return Array.isArray(parsed) ? parsed.length > 0 : (parsed && (Array.isArray(parsed.roads) || Array.isArray(parsed.layers)));
             } catch (e) {
-                console.error("Local data check failed", e);
+                return false;
             }
-        }
+        });
+        setHasLocalData(found);
     };
 
     const fetchReports = async () => {
@@ -85,17 +88,17 @@ const Dashboard = () => {
         reader.readAsText(file);
     };
 
-    if (!user || (user.role !== 'ADMIN' && user.role !== 'SUPER_ADMIN')) return null;
+    if (!user || user.role !== 'SUPER_ADMIN') return null; // Restrict entire diagnostic view or parts below
 
     return (
         <div className="container" style={{ padding: '2rem 1rem' }}>
-            {hasLocalData && recoveryStatus !== 'success' && (
+            {user.role === 'SUPER_ADMIN' && hasLocalData && recoveryStatus !== 'success' && (
                 <div className="card" style={{ marginBottom: '2rem', background: '#fff9db', border: '1px solid #fab005', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <AlertTriangle color="#f08c00" size={32} />
                         <div>
-                            <strong style={{ display: 'block' }}>Eski Veriler Tespit Edildi!</strong>
-                            <p style={{ margin: 0, fontSize: '0.9rem' }}>Tarayıcınızda kayıtlı {roads.length === 0 ? 'silinmiş görünen' : 'eski'} yol çizgileri bulundu. Bunları veritabanına geri yüklemek ister misiniz?</p>
+                            <strong style={{ display: 'block' }}>Eski Veriler Tespit Edildi! (Derin Tarama v2.0.7)</strong>
+                            <p style={{ margin: 0, fontSize: '0.9rem' }}>Tarayıcınızda farklı isimler altında kayıtlı yol verileri bulundu. Bunları koordinat karşılaştırması yaparak geri yüklemek ister misiniz?</p>
                         </div>
                     </div>
                     <button
@@ -110,7 +113,8 @@ const Dashboard = () => {
                                 alert("Veriler kurtarılırken bir hata oluştu.");
                             } else {
                                 setRecoveryStatus('success');
-                                alert(`${result.count} yol başarıyla kurtarıldı!`);
+                                alert(`${result.count} yeni yol başarıyla kurtarıldı!`);
+                                setRecoverySummary(`${result.count} adet yeni yol veritabanına eklendi.`);
                                 setHasLocalData(false);
                             }
                         }}
@@ -167,26 +171,43 @@ const Dashboard = () => {
                 </div>
             </div>
 
-            <div className="card" style={{ marginBottom: '2rem', background: '#f8fafc' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <Database size={20} color="var(--color-primary)" />
-                        <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Veri Yönetimi ve Yedekleme</h2>
+            {user.role === 'SUPER_ADMIN' && (
+                <div className="card" style={{ marginBottom: '2rem', background: '#f8fafc' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Database size={20} color="var(--color-primary)" />
+                            <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Veri Yönetimi ve Yedekleme (Sadece Admin)</h2>
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button className="btn btn-outline" onClick={() => setShowLocalKeys(!showLocalKeys)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Settings size={16} /> Sistem Bilgisi (Key'ler)
+                            </button>
+                            <button className="btn btn-outline" onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Download size={16} /> Yolları Yedekle (JSON)
+                            </button>
+                            <label className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                <Upload size={16} /> Yedek Yükle
+                                <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
+                            </label>
+                        </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '1rem' }}>
-                        <button className="btn btn-outline" onClick={handleExport} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <Download size={16} /> Yolları Yedekle (JSON)
-                        </button>
-                        <label className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                            <Upload size={16} /> Yedek Yükle
-                            <input type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
-                        </label>
-                    </div>
+                    {showLocalKeys && (
+                        <div style={{ marginTop: '1rem', padding: '1rem', background: '#fff', border: '1px solid #ddd', borderRadius: '4px', fontSize: '0.8rem' }}>
+                            <strong>Tarayıcıdaki Tüm Anahtarlar:</strong>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                {Object.keys(localStorage).map(key => (
+                                    <span key={key} style={{ padding: '0.2rem 0.5rem', background: '#eee', borderRadius: '4px' }}>
+                                        {key} ({localStorage.getItem(key)?.length || 0} byte)
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    <p style={{ margin: '1rem 0 0 0', fontSize: '0.85rem', color: '#666' }}>
+                        İpucu: Bu araçlar sadece 'admin' kullanıcısı için görünürdür. Koordinat bazlı kurtarma ile silinen yollar geri getirilirken isim çakışmaları sorun oluşturmaz.
+                    </p>
                 </div>
-                <p style={{ margin: '1rem 0 0 0', fontSize: '0.85rem', color: '#666' }}>
-                    İpucu: Çizdiğiniz yolların kalıcı olması için düzenli olarak yedek almanız önerilir. Tarayıcınızdaki eski verileri kurtardığınızda da veritabanına otomatik eklenir.
-                </p>
-            </div>
+            )}
 
             <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}>
                 {roads.map(road => (

@@ -361,36 +361,63 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
 
     const recoverFromLocalStorage = async () => {
         console.log("Checking for local data recovery...");
-        const localData = localStorage.getItem('roads') || localStorage.getItem('roads_backup');
+        // Possible keys used in previous versions
+        const keys = ['roads', 'roads_backup', 'ovacik_roads', 'road_data', 'map_roads', 'layers', 'ovacik-roads'];
+        let allFoundRoads: Road[] = [];
 
-        if (!localData) return { count: 0, error: null };
+        keys.forEach(key => {
+            const data = localStorage.getItem(key);
+            if (data) {
+                try {
+                    const parsed = JSON.parse(data);
+                    if (Array.isArray(parsed)) {
+                        allFoundRoads = [...allFoundRoads, ...parsed];
+                    } else if (typeof parsed === 'object' && parsed !== null) {
+                        // Handle cases where data might be an object with a roads property
+                        if (Array.isArray(parsed.roads)) allFoundRoads = [...allFoundRoads, ...parsed.roads];
+                        if (Array.isArray(parsed.layers)) allFoundRoads = [...allFoundRoads, ...parsed.layers];
+                    }
+                } catch (e) {
+                    console.warn(`Failed to parse local data for key: ${key}`);
+                }
+            }
+        });
+
+        if (allFoundRoads.length === 0) return { count: 0, error: null };
 
         try {
-            const parsedRoads: Road[] = JSON.parse(localData);
-            if (!Array.isArray(parsedRoads) || parsedRoads.length === 0) return { count: 0, error: null };
+            // 1. Fetch current roads to avoid duplicates by coordinates
+            const { data: dbRoads } = await supabase.from('roads').select('coordinates');
 
-            // Fetch current roads to avoid duplicates
-            const { data: dbRoads } = await supabase.from('roads').select('name');
-            const existingNames = new Set((dbRoads || []).map(r => r.name));
+            // Helper to stringify coordinates for easy comparison
+            const getCoordKey = (coords: [number, number][]) =>
+                JSON.stringify(coords.map(c => [Math.round(c[0] * 10000) / 10000, Math.round(c[1] * 10000) / 10000]));
 
-            const toUpload = parsedRoads
-                .filter(r => !existingNames.has(r.name)) // Only upload if name is unique
+            const existingCoordSets = new Set((dbRoads || []).map(r => getCoordKey(r.coordinates)));
+
+            // 2. Filter and Map
+            const toUpload = allFoundRoads
+                .filter(r => r && Array.isArray(r.coordinates) && r.coordinates.length > 0)
+                .filter(r => !existingCoordSets.has(getCoordKey(r.coordinates)))
                 .map(r => ({
-                    id: r.id.length > 30 ? r.id : uuidv4(), // Ensure UUID
-                    name: r.name,
-                    status: r.status,
+                    id: (r.id && r.id.length > 30) ? r.id : uuidv4(),
+                    name: r.name || "İsimsiz Yol",
+                    status: (r.status as RoadStatus) || 'OPEN',
                     coordinates: r.coordinates,
                     images: r.images || [],
                     last_updated: r.lastUpdated || new Date().toISOString()
                 }));
 
-            if (toUpload.length === 0) return { count: 0, error: null };
+            // Deduplicate toUpload itself (in case multiple keys had same data)
+            const uniqueToUpload = Array.from(new Map(toUpload.map(r => [getCoordKey(r.coordinates), r])).values());
 
-            const { error } = await supabase.from('roads').insert(toUpload);
+            if (uniqueToUpload.length === 0) return { count: 0, error: null };
+
+            const { error } = await supabase.from('roads').insert(uniqueToUpload);
             if (error) throw error;
 
             await fetchRoads();
-            return { count: toUpload.length, error: null };
+            return { count: uniqueToUpload.length, error: null };
         } catch (err) {
             console.error("Recovery failed:", err);
             return { count: 0, error: err };
