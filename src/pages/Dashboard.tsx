@@ -121,6 +121,11 @@ const Dashboard = () => {
                     >
                         {recoveryStatus === 'loading' ? 'Yükleniyor...' : 'Verileri Kurtar'}
                     </button>
+                    {recoverySummary && (
+                        <div style={{ marginTop: '1rem', padding: '0.75rem', background: '#d4edda', border: '1px solid #c3e6cb', color: '#155724', borderRadius: '4px', fontSize: '0.9rem', width: '100%' }}>
+                            {recoverySummary}
+                        </div>
+                    )}
                 </div>
             )}
             <div className="card" style={{ marginBottom: '2rem' }}>
