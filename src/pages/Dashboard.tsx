@@ -4,7 +4,7 @@ import { useAnnouncements } from '../context/AnnouncementContext';
 import { STATUS_CONFIG } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle, XCircle, MessageSquare, Download, Upload, Database, Settings } from 'lucide-react';
+import { AlertTriangle, CheckCircle, XCircle, MessageSquare, Download, Upload, Database, Settings, Map, LifeBuoy } from 'lucide-react';
 import { supabase } from '../supabase';
 import PhotoGallery from '../components/PhotoGallery';
 
@@ -17,7 +17,7 @@ interface Report {
 
 const Dashboard = () => {
     const { user, isAuthenticated } = useAuth();
-    const { roads, updateRoadStatus, updateAllRoadStatus, recoverFromLocalStorage, backupToLocalStorage } = useRoads();
+    const { roads, updateRoadStatus, updateAllRoadStatus, recoverFromLocalStorage, backupToLocalStorage, uploadDebugInfo, processKMLData } = useRoads();
     const { announcements, addAnnouncement, deleteAnnouncement } = useAnnouncements();
     const navigate = useNavigate();
     const [reports, setReports] = useState<Report[]>([]);
@@ -88,7 +88,43 @@ const Dashboard = () => {
         reader.readAsText(file);
     };
 
-    if (!user || user.role !== 'SUPER_ADMIN') return null; // Restrict entire diagnostic view or parts below
+    const handleKMLImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const text = event.target?.result as string;
+            if (text) {
+                setRecoveryStatus('loading');
+                const result = await processKMLData(text);
+                if (result.error) {
+                    alert(`KML yüklenirken hata: ${result.error}`);
+                    setRecoveryStatus('error');
+                } else {
+                    alert(`${result.count} yol başarıyla eklendi! ${result.skipped || 0} yol zaten mevcut olduğu için atlandı.`);
+                    setRecoveryStatus('success');
+                }
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    const handleDebugUpload = async () => {
+        if (!confirm("Teknik destek için tarayıcı kayıtlarının bir kopyası gönderilecek. Onaylıyor musunuz?")) return;
+
+        setRecoveryStatus('loading');
+        const result = await uploadDebugInfo();
+        if (result.success) {
+            alert("Veriler başarıyla gönderildi. Teşekkürler!");
+            setRecoveryStatus('success');
+        } else {
+            alert("Gönderim sırasında bir hata oluştu.");
+            setRecoveryStatus('error');
+        }
+    };
+
+    if (!user || user.role !== 'SUPER_ADMIN') return null;
 
     return (
         <div className="container" style={{ padding: '2rem 1rem' }}>
@@ -183,7 +219,14 @@ const Dashboard = () => {
                             <Database size={20} color="var(--color-primary)" />
                             <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Veri Yönetimi ve Yedekleme (Sadece Admin)</h2>
                         </div>
-                        <div style={{ display: 'flex', gap: '1rem' }}>
+                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                            <button className="btn btn-outline" onClick={handleDebugUpload} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderColor: '#f08c00', color: '#f08c00' }}>
+                                <LifeBuoy size={16} /> Teknik Destek (Debug)
+                            </button>
+                            <label className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                                <Map size={16} /> KML Yükle
+                                <input type="file" accept=".kml" onChange={handleKMLImport} style={{ display: 'none' }} />
+                            </label>
                             <button className="btn btn-outline" onClick={() => setShowLocalKeys(!showLocalKeys)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <Settings size={16} /> Sistem Bilgisi (Key'ler)
                             </button>

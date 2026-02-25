@@ -19,6 +19,8 @@ interface RoadContextType {
     updateRoadCameraPosition: (id: string, position: 'START' | 'CENTER' | 'END') => void;
     recoverFromLocalStorage: () => Promise<{ count: number; error: any | null }>;
     backupToLocalStorage: () => void;
+    uploadDebugInfo: () => Promise<{ success: boolean; error?: any }>;
+    processKMLData: (kmlText: string) => Promise<{ count: number; error: any | null; skipped?: number }>;
 }
 
 const RoadContext = createContext<RoadContextType | undefined>(undefined);
@@ -424,11 +426,105 @@ export const RoadProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const uploadDebugInfo = async () => {
+        console.log("Uploading debug snapshot of localStorage...");
+        const snapshot: Record<string, string> = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key) snapshot[key] = localStorage.getItem(key) || '';
+        }
+
+        try {
+            const { error } = await supabase.from('logs').insert({
+                user_id: user?.username || 'admin_debug',
+                action: 'DEBUG_DUMP',
+                details: {
+                    snapshot,
+                    timestamp: new Date().toISOString(),
+                    userAgent: navigator.userAgent
+                }
+            });
+            if (error) throw error;
+            return { success: true };
+        } catch (err) {
+            console.error("Debug upload failed:", err);
+            return { success: false, error: err };
+        }
+    };
+
+    const processKMLData = async (kmlText: string) => {
+        console.log("Processing KML data...");
+        try {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(kmlText, "text/xml");
+            const placemarks = xmlDoc.getElementsByTagName("Placemark");
+            const newRoadsList: any[] = [];
+
+            for (let i = 0; i < placemarks.length; i++) {
+                const placemark = placemarks[i];
+                const name = placemark.getElementsByTagName("name")[0]?.textContent || `KML Yol ${i + 1}`;
+                const coordsNode = placemark.getElementsByTagName("coordinates")[0];
+
+                if (coordsNode && coordsNode.textContent) {
+                    const coordString = coordsNode.textContent.trim();
+                    const coordPairs = coordString.split(/\s+/);
+                    const coordinates: [number, number][] = coordPairs
+                        .map(pair => {
+                            const [lng, lat] = pair.split(',').map(Number);
+                            return [lat, lng] as [number, number];
+                        })
+                        .filter(coord => !isNaN(coord[0]) && !isNaN(coord[1]));
+
+                    if (coordinates.length > 0) {
+                        newRoadsList.push({
+                            name,
+                            coordinates,
+                            status: 'OPEN',
+                            images: [],
+                            lastUpdated: new Date().toISOString()
+                        });
+                    }
+                }
+            }
+
+            if (newRoadsList.length === 0) return { count: 0, error: 'KML içerisinde geçerli yol (çizgi) verisi bulunamadı.' };
+
+            // Deduplication by coordinates
+            const { data: dbRoads } = await supabase.from('roads').select('coordinates');
+            const getCoordKey = (coords: [number, number][]) =>
+                JSON.stringify(coords.map(c => [Math.round(c[0] * 10000) / 10000, Math.round(c[1] * 10000) / 10000]));
+            const existingCoordSets = new Set((dbRoads || []).map(r => getCoordKey(r.coordinates)));
+
+            const toUpload = newRoadsList
+                .filter(r => r.coordinates && !existingCoordSets.has(getCoordKey(r.coordinates)))
+                .map(r => ({
+                    id: uuidv4(),
+                    name: r.name,
+                    status: 'OPEN',
+                    coordinates: r.coordinates,
+                    images: [],
+                    last_updated: new Date().toISOString()
+                }));
+
+            if (toUpload.length === 0) return { count: 0, error: null, skipped: newRoadsList.length };
+
+            const { error } = await supabase.from('roads').insert(toUpload);
+            if (error) throw error;
+
+            await fetchRoads();
+            return { count: toUpload.length, error: null, skipped: newRoadsList.length - toUpload.length };
+        } catch (err) {
+            console.error("KML processing failed:", err);
+            return { count: 0, error: err };
+        }
+    };
+
     return (
         <RoadContext.Provider value={{
             roads, updateRoadStatus, updateAllRoadStatus, addRoad, deleteRoad,
             updateRoadName, addRoadImage, deleteRoadImage, uploadRoadImage,
-            updateRoadCameraPosition, recoverFromLocalStorage, backupToLocalStorage
+            updateRoadCameraPosition, recoverFromLocalStorage, backupToLocalStorage,
+            uploadDebugInfo, processKMLData
         }}>
             {children}
         </RoadContext.Provider>
